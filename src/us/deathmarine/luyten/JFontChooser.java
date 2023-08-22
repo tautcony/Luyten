@@ -228,8 +228,8 @@ public class JFontChooser extends JComponent {
 
 					if (value instanceof String) {
 						renderer.setText((String) value);
-						renderer.setFont(
-								new Font(DEFAULT_FONT.getName(), FONT_STYLE_CODES[index], DEFAULT_FONT.getSize() + 2));
+						//noinspection MagicConstant
+						renderer.setFont(new Font(DEFAULT_FONT.getName(), FONT_STYLE_CODES[index], DEFAULT_FONT.getSize() + 2));
 					} else {
 						renderer.setText("");
 					}
@@ -313,8 +313,8 @@ public class JFontChooser extends JComponent {
 	 * @see java.awt.Font
 	 **/
 	public Font getSelectedFont() {
-		Font font = new Font(getSelectedFontFamily(), getSelectedFontStyle(), getSelectedFontSize());
-		return font;
+		//noinspection MagicConstant
+        return new Font(getSelectedFontFamily(), getSelectedFontStyle(), getSelectedFontSize());
 	}
 
 	/**
@@ -328,7 +328,7 @@ public class JFontChooser extends JComponent {
 	public void setSelectedFontFamily(String name) {
 		String[] names = getFontFamilies();
 		for (int i = 0; i < names.length; i++) {
-			if (names[i].toLowerCase().equals(name.toLowerCase())) {
+			if (names[i].equalsIgnoreCase(name)) {
 				getFontFamilyList().setSelectedIndex(i);
 				break;
 			}
@@ -433,7 +433,7 @@ public class JFontChooser extends JComponent {
 		}
 
 		public void valueChanged(ListSelectionEvent e) {
-			if (e.getValueIsAdjusting() == false) {
+			if (!e.getValueIsAdjusting()) {
 				JList<?> list = (JList<?>) e.getSource();
 				String selectedValue = (String) list.getSelectedValue();
 
@@ -466,7 +466,7 @@ public class JFontChooser extends JComponent {
 		}
 	}
 
-	protected class TextFieldKeyHandlerForListSelectionUpDown extends KeyAdapter {
+	protected static class TextFieldKeyHandlerForListSelectionUpDown extends KeyAdapter {
 		private JList<?> targetList;
 
 		public TextFieldKeyHandlerForListSelectionUpDown(JList<?> list) {
@@ -497,7 +497,7 @@ public class JFontChooser extends JComponent {
 		}
 	}
 
-	protected class ListSearchTextFieldDocumentHandler implements DocumentListener {
+	protected static class ListSearchTextFieldDocumentHandler implements DocumentListener {
 		JList<?> targetList;
 
 		public ListSearchTextFieldDocumentHandler(JList<?> targetList) {
@@ -760,12 +760,11 @@ public class JFontChooser extends JComponent {
 
 	protected String[] getFontStyleNames() {
 		if (fontStyleNames == null) {
-			int i = 0;
 			fontStyleNames = new String[4];
-			fontStyleNames[i++] = ("Plain");
-			fontStyleNames[i++] = ("Bold");
-			fontStyleNames[i++] = ("Italic");
-			fontStyleNames[i++] = ("BoldItalic");
+			fontStyleNames[0] = ("Plain");
+			fontStyleNames[1] = ("Bold");
+			fontStyleNames[2] = ("Italic");
+			fontStyleNames[3] = ("BoldItalic");
 		}
 		return fontStyleNames;
 	}

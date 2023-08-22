@@ -3,15 +3,13 @@ package us.deathmarine.luyten;
 import java.awt.Cursor;
 import java.awt.Desktop;
 import java.awt.Font;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
-import java.util.concurrent.Callable;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.List;
 import java.util.ArrayList;
@@ -41,17 +39,15 @@ public class Luyten {
 	private static ServerSocket lockSocket = null;
 
 	public static void main(final String[] args) {
-		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-			@Override
-			public void run() {
-				try {
-					if (lockSocket != null) {
-						lockSocket.close();
-					}
-				} catch (IOException e) {
-				}
-			}
-		}));
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                if (lockSocket != null) {
+                    lockSocket.close();
+                }
+            } catch (IOException e) {
+				e.printStackTrace();
+            }
+        }));
 
 		try {
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -70,12 +66,15 @@ public class Luyten {
 		} catch (Exception e) {
 			// Instance already exists. Open new file in running instance
 			try {
-				Socket socket = new Socket("localhost", 3456);
-				DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
-				dos.writeUTF(args[0]);
-				dos.flush();
-				dos.close();
-				socket.close();
+				if (args == null || args.length == 0) {
+					return;
+				}
+				try (Socket socket = new Socket("localhost", 3456)) {
+					try (DataOutputStream dos = new DataOutputStream(socket.getOutputStream())) {
+						dos.writeUTF(args[0]);
+						dos.flush();
+					}
+				}
 			} catch (IOException ex) {
 				showExceptionDialog("Exception", e);
 			}
@@ -85,37 +84,29 @@ public class Luyten {
 	private static void launchMainInstance(final File fileFromCommandLine) throws IOException {
 		lockSocket = new ServerSocket(3456);
 		launchSession(fileFromCommandLine);
-		new Thread(new Runnable() {
-			@Override
-			public void run() {
-				launchServer();
-			}
-		}).start();
+		new Thread(Luyten::launchServer).start();
 	}
 
 	private static void launchSession(final File fileFromCommandLine) {
-		SwingUtilities.invokeLater(new Runnable() {
-			@Override
-			public void run() {
-				if (!mainWindowRef.compareAndSet(null, new MainWindow(fileFromCommandLine))) {
-					// Already set - so add the files to open
-					addToPendingFiles(fileFromCommandLine);
-				}
-				processPendingFiles();
-				mainWindowRef.get().setVisible(true);
-			}
-		});
+		SwingUtilities.invokeLater(() -> {
+            if (!mainWindowRef.compareAndSet(null, new MainWindow(fileFromCommandLine))) {
+                // Already set - so add the files to open
+                addToPendingFiles(fileFromCommandLine);
+            }
+            processPendingFiles();
+            mainWindowRef.get().setVisible(true);
+        });
 	}
 
 	private static void launchServer() {
 		try { // Server
 			while (true) {
-				Socket socket = lockSocket.accept();
-				DataInputStream dis = new DataInputStream(socket.getInputStream());
-				addToPendingFiles(getFileFromCommandLine(dis.readUTF()));
-				processPendingFiles();
-				dis.close();
-				socket.close();
+				try (Socket socket = lockSocket.accept()) {
+					try (DataInputStream dis = new DataInputStream(socket.getInputStream())) {
+						addToPendingFiles(getFileFromCommandLine(dis.readUTF()));
+						processPendingFiles();
+					}
+				}
 			}
 		} catch (IOException e) { // Client
 			showExceptionDialog("Exception", e);
@@ -169,28 +160,30 @@ public class Luyten {
 
 	public static String getVersion() {
 		String result = "";
-		try {
-			String line;
-			BufferedReader br = new BufferedReader(new InputStreamReader(
-					ClassLoader.getSystemResourceAsStream("META-INF/maven/us.deathmarine/luyten/pom.properties")));
-			while ((line = br.readLine()) != null) {
-				if (line.contains("version"))
-					result = line.split("=")[1];
+		InputStream pom = ClassLoader.getSystemResourceAsStream("META-INF/maven/us.deathmarine/luyten/pom.properties");
+		if (pom == null) {
+			return result;
+		}
+		try (InputStreamReader sr = new InputStreamReader(Objects.requireNonNull(pom))) {
+			try (BufferedReader br = new BufferedReader(sr)) {
+				String line;
+				while ((line = br.readLine()) != null) {
+					if (line.contains("version"))
+						result = line.split("=")[1];
+				}
 			}
-			br.close();
 		} catch (Exception e) {
 			return result;
 		}
 		return result;
-
 	}
 
 	/**
 	 * Method allows for users to copy the stacktrace for reporting any issues.
 	 * Add Cool Hyperlink Enhanced for mouse users.
 	 * 
-	 * @param message
-	 * @param e
+	 * @param message Exception Message
+	 * @param e Exception
 	 */
 	public static void showExceptionDialog(String message, Exception e) {
 		StringWriter sw = new StringWriter();
@@ -225,13 +218,10 @@ public class Luyten {
 					new JPopupMenu() {
 						{
 							JMenuItem menuitem = new JMenuItem("Select All");
-							menuitem.addActionListener(new ActionListener() {
-								@Override
-								public void actionPerformed(ActionEvent e) {
-									exception.requestFocus();
-									exception.selectAll();
-								}
-							});
+							menuitem.addActionListener(e12 -> {
+                                exception.requestFocus();
+                                exception.selectAll();
+                            });
 							this.add(menuitem);
 							menuitem = new JMenuItem("Copy");
 							menuitem.addActionListener(new DefaultEditorKit.CopyAction());

@@ -51,38 +51,38 @@ public class DropListener implements DropTargetListener {
 		} else {
 			DataFlavor[] flavors = transferable.getTransferDataFlavors();
 			boolean handled = false;
-			for (int zz = 0; zz < flavors.length; zz++) {
-				if (flavors[zz].isRepresentationClassReader()) {
-					try {
-						Reader reader = flavors[zz].getReaderForText(transferable);
-						BufferedReader br = new BufferedReader(reader);
-						List<File> list = new ArrayList<File>();
-						String line = null;
-						while ((line = br.readLine()) != null) {
-							try {
-								if (new String("" + (char) 0).equals(line))
-									continue;
-								File file = new File(new URI(line));
-								list.add(file);
-							} catch (Exception ex) {
-								ex.printStackTrace();
-							}
-						}
-						if (list.size() > 1) {
-							event.rejectDrop();
-							return;
-						}
-						if (list.size() == 1) {
-							mainWindow.onFileDropped(list.get(0));
-						}
-						event.getDropTargetContext().dropComplete(true);
-						handled = true;
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
-					break;
-				}
-			}
+            for (DataFlavor flavor : flavors) {
+                if (flavor.isRepresentationClassReader()) {
+                    try {
+                        Reader reader = flavor.getReaderForText(transferable);
+                        BufferedReader br = new BufferedReader(reader);
+                        List<File> list = new ArrayList<>();
+                        String line;
+                        while ((line = br.readLine()) != null) {
+                            try {
+                                if (("" + (char) 0).equals(line))
+                                    continue;
+                                File file = new File(new URI(line));
+                                list.add(file);
+                            } catch (Exception ex) {
+                                ex.printStackTrace();
+                            }
+                        }
+                        if (list.size() > 1) {
+                            event.rejectDrop();
+                            return;
+                        }
+                        if (list.size() == 1) {
+                            mainWindow.onFileDropped(list.get(0));
+                        }
+                        event.getDropTargetContext().dropComplete(true);
+                        handled = true;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    break;
+                }
+            }
 			if (!handled) {
 				event.rejectDrop();
 			}

@@ -11,17 +11,15 @@ import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.lang.instrument.Instrumentation;
 import java.util.*;
-import java.util.concurrent.Callable;
 
 import javax.swing.*;
 import javax.swing.border.BevelBorder;
 import javax.swing.plaf.basic.BasicTabbedPaneUI;
 
+import net.bytebuddy.agent.ByteBuddyAgent;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 /**
@@ -33,17 +31,17 @@ public class MainWindow extends JFrame {
 	private static final String TITLE = "Luyten";
 	private static final String DEFAULT_TAB = "#DEFAULT";
 
-	private JProgressBar bar;
-	private JLabel label;
+	private final JProgressBar bar;
+	private final JLabel label;
 	FindBox findBox;
 	private FindAllBox findAllBox;
-	private ConfigSaver configSaver;
-	private WindowPosition windowPosition;
-	private LuytenPreferences luytenPrefs;
-	private FileDialog fileDialog;
-	private FileSaver fileSaver;
-	private JTabbedPane jarsTabbedPane;
-	private Map<String, Model> jarModels;
+	private final ConfigSaver configSaver;
+	private final WindowPosition windowPosition;
+	private final LuytenPreferences luytenPrefs;
+	private final FileDialog fileDialog;
+	private final FileSaver fileSaver;
+	private final JTabbedPane jarsTabbedPane;
+	private final Map<String, Model> jarModels;
 	public MainMenuBar mainMenuBar;
 
 	public MainWindow(File fileFromCommandLine) {
@@ -51,7 +49,7 @@ public class MainWindow extends JFrame {
 		windowPosition = configSaver.getMainWindowPosition();
 		luytenPrefs = configSaver.getLuytenPreferences();
 
-		jarModels = new HashMap<String, Model>();
+		jarModels = new HashMap<>();
 		mainMenuBar = new MainMenuBar(this);
 		this.setJMenuBar(mainMenuBar);
 
@@ -169,23 +167,20 @@ public class MainWindow extends JFrame {
 		Model jarModel = new Model(this);
 		jarModel.loadFile(file);
 		jarModels.put(file.getAbsolutePath(), jarModel);
-		jarsTabbedPane.addTab(file.getName(), jarModel);
+		jarsTabbedPane.addTab(file.getAbsolutePath(), jarModel);
 		jarsTabbedPane.setSelectedComponent(jarModel);
 
-		final String tabName = file.getName();
+		final String tabName = file.getAbsolutePath();
 		int index = jarsTabbedPane.indexOfTab(tabName);
-		Model.Tab tabUI = new Model.Tab(tabName, new Callable<Void>() {
-			@Override
-			public Void call() {
-				int index = jarsTabbedPane.indexOfTab(tabName);
-				jarModels.remove(file.getAbsolutePath());
-				jarsTabbedPane.remove(index);
-				if (jarsTabbedPane.getTabCount() == 0) {
-					createDefaultTab();
-				}
-				return null;
-			}
-		});
+		Model.Tab tabUI = new Model.Tab(tabName, () -> {
+            int index1 = jarsTabbedPane.indexOfTab(tabName);
+            jarModels.remove(file.getAbsolutePath());
+            jarsTabbedPane.remove(index1);
+            if (jarsTabbedPane.getTabCount() == 0) {
+                createDefaultTab();
+            }
+            return null;
+        });
 		jarsTabbedPane.setTabComponentAt(index, tabUI);
 		if (jarsTabbedPane.indexOfTab(DEFAULT_TAB) != -1 && jarsTabbedPane.getTabCount() > 1) {
 			removeDefaultTab();
@@ -194,8 +189,19 @@ public class MainWindow extends JFrame {
 	}
 
 	public void onCloseFileMenu() {
-		this.getSelectedModel().closeFile();
-		jarModels.remove(getSelectedModel());
+		Model model = getSelectedModel();
+		String key = (model.getOpenedFile() == null) ? null : model.getOpenedFile().getAbsolutePath();
+		model.closeFile();
+		if (key != null) {
+			jarModels.remove(key);
+			int index = jarsTabbedPane.indexOfTab(key);
+			if (index >= 0) {
+				jarsTabbedPane.remove(index);
+				if (jarsTabbedPane.getTabCount() == 0) {
+					createDefaultTab();
+				}
+			}
+		}
 	}
 
 	public void onSaveAsMenu() {
@@ -275,33 +281,28 @@ public class MainWindow extends JFrame {
 	}
 
 	public void onLegalMenu() {
-		new Thread() {
-			public void run() {
-				try {
-					bar.setVisible(true);
-					bar.setIndeterminate(true);
-					String legalStr = getLegalStr();
-					getSelectedModel().showLegal(legalStr);
-				} finally {
-					bar.setIndeterminate(false);
-					bar.setVisible(false);
-				}
-			}
-		}.start();
+		new Thread(() -> {
+            try {
+                bar.setVisible(true);
+                bar.setIndeterminate(true);
+                String legalStr = getLegalStr();
+                getSelectedModel().showLegal(legalStr);
+            } finally {
+                bar.setIndeterminate(false);
+                bar.setVisible(false);
+            }
+        }).start();
 	}
 
 	public void onListLoadedClasses() {
 		try {
+
+			Instrumentation inst = ByteBuddyAgent.install();
+			Class<?>[] loadedClasses = inst.getAllLoadedClasses();
+
 			StringBuilder sb = new StringBuilder();
-			ClassLoader myCL = Thread.currentThread().getContextClassLoader();
-			bar.setVisible(true);
-			bar.setIndeterminate(true);
-			while (myCL != null) {
-				sb.append("ClassLoader: " + myCL + "\n");
-				for (Iterator<?> iter = list(myCL); iter.hasNext();) {
-					sb.append("\t" + iter.next() + "\n");
-				}
-				myCL = myCL.getParent();
+			for (Class<?> loadedClass : loadedClasses) {
+				sb.append("\t").append(loadedClass.toString()).append("\n");
 			}
 			this.getSelectedModel().show("Debug", sb.toString());
 		} finally {
@@ -310,36 +311,27 @@ public class MainWindow extends JFrame {
 		}
 	}
 
-	private static Iterator<?> list(ClassLoader CL) {
-		Class<?> CL_class = CL.getClass();
-		while (CL_class != java.lang.ClassLoader.class) {
-			CL_class = CL_class.getSuperclass();
+	private String readFromInputString(InputStream inputStream) throws IOException {
+		StringBuilder sb = new StringBuilder();
+		if (inputStream == null) {
+			return "";
 		}
-		java.lang.reflect.Field ClassLoader_classes_field;
-		try {
-			ClassLoader_classes_field = CL_class.getDeclaredField("classes");
-			ClassLoader_classes_field.setAccessible(true);
-			Vector<?> classes = (Vector<?>) ClassLoader_classes_field.get(CL);
-			return classes.iterator();
-		} catch (NoSuchFieldException | SecurityException | IllegalArgumentException | IllegalAccessException e) {
-			Luyten.showExceptionDialog("Exception!", e);
+		try (InputStreamReader sr = new InputStreamReader(inputStream)) {
+			try (BufferedReader reader = new BufferedReader(sr)) {
+				String line;
+				while ((line = reader.readLine()) != null)
+					sb.append(line).append("\n");
+			}
 		}
-		return null;
+		return sb.toString();
 	}
 
 	private String getLegalStr() {
 		StringBuilder sb = new StringBuilder();
 		try {
-			BufferedReader reader = new BufferedReader(
-					new InputStreamReader(getClass().getResourceAsStream("/distfiles/Procyon.License.txt")));
-			String line;
-			while ((line = reader.readLine()) != null)
-				sb.append(line).append("\n");
+			sb.append(readFromInputString(getClass().getResourceAsStream("/distfiles/Procyon.License.txt")));
 			sb.append("\n\n\n\n\n");
-			reader = new BufferedReader(
-					new InputStreamReader(getClass().getResourceAsStream("/distfiles/RSyntaxTextArea.License.txt")));
-			while ((line = reader.readLine()) != null)
-				sb.append(line).append("\n");
+			sb.append(getClass().getResourceAsStream("/distfiles/RSyntaxTextArea.License.txt"));
 		} catch (IOException e) {
 			Luyten.showExceptionDialog("Exception!", e);
 		}

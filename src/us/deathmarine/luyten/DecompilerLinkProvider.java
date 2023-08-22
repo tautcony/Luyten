@@ -161,10 +161,10 @@ public class DecompilerLinkProvider implements LinkProvider {
 		if (packageName == null)
 			return typeRef;
 		String[] nameParts = name.split("\\$");
-		String newName = "";
+		StringBuilder newName = new StringBuilder();
 		String sep = "";
 		for (int i = 0; i < nameParts.length - 1; i++) {
-			newName = newName + sep + nameParts[i];
+			newName.append(sep).append(nameParts[i]);
 			sep = "$";
 			String newInternalName = packageName.replaceAll("\\.", "/") + "/" + newName;
 			TypeReference newTypeRef = metadataSystem.lookupType(newInternalName);
@@ -207,7 +207,7 @@ public class DecompilerLinkProvider implements LinkProvider {
 		if (linkParts.length < 3)
 			return false;
 		String typeStr = linkParts[2];
-		if (typeStr.trim().length() <= 0)
+		if (typeStr.trim().length() == 0)
 			return false;
 		TypeReference typeRef = metadataSystem.lookupType(typeStr.replaceAll("\\.", "/"));
 		if (typeRef == null)
@@ -220,7 +220,7 @@ public class DecompilerLinkProvider implements LinkProvider {
 
 		if (isSelectionMapsPopulated) {
 			// current type's navigable definitions checked already, now it's erroneous
-			if (currentTypeQualifiedName == null || currentTypeQualifiedName.trim().length() <= 0)
+			if (currentTypeQualifiedName == null || currentTypeQualifiedName.trim().length() == 0)
 				return false;
 			if (typeStr.equals(currentTypeQualifiedName) || typeStr.startsWith(currentTypeQualifiedName + ".")
 					|| typeStr.startsWith(currentTypeQualifiedName + "$"))
@@ -229,13 +229,9 @@ public class DecompilerLinkProvider implements LinkProvider {
 
 		// check linked field/method exists
 		if (uniqueStr.startsWith("method")) {
-			if (findMethodInType(typeDef, uniqueStr) == null) {
-				return false;
-			}
+            return findMethodInType(typeDef, uniqueStr) != null;
 		} else if (uniqueStr.startsWith("field")) {
-			if (findFieldInType(typeDef, uniqueStr) == null) {
-				return false;
-			}
+            return findFieldInType(typeDef, uniqueStr) != null;
 		}
 		return true;
 	}
@@ -246,12 +242,12 @@ public class DecompilerLinkProvider implements LinkProvider {
 			return null;
 		String methodName = linkParts[3];
 		String methodErasedSignature = linkParts[4];
-		if (methodName.trim().length() <= 0 || methodErasedSignature.trim().length() <= 0)
+		if (methodName.trim().length() == 0 || methodErasedSignature.trim().length() == 0)
 			return null;
 		List<MethodDefinition> declaredMethods = typeDef.getDeclaredMethods();
 		if (declaredMethods == null)
 			return null;
-		boolean isFound = false;
+		boolean isFound;
 		for (MethodDefinition declaredMethod : declaredMethods) {
 			isFound = (declaredMethod != null && methodName.equals(declaredMethod.getName()));
 			isFound = (isFound && methodErasedSignature.equals(declaredMethod.getErasedSignature()));
@@ -271,12 +267,12 @@ public class DecompilerLinkProvider implements LinkProvider {
 		if (linkParts.length != 4)
 			return null;
 		String fieldName = linkParts[3];
-		if (fieldName.trim().length() <= 0)
+		if (fieldName.trim().length() == 0)
 			return null;
 		List<FieldDefinition> declaredFields = typeDef.getDeclaredFields();
 		if (declaredFields == null)
 			return null;
-		boolean isFound = false;
+		boolean isFound;
 		for (FieldDefinition declaredField : declaredFields) {
 			isFound = (declaredField != null && fieldName.equals(declaredField.getName()));
 			if (isFound) {

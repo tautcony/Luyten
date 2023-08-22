@@ -21,7 +21,6 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
 import java.util.Collections;
@@ -61,7 +60,7 @@ public class FindAllBox extends JDialog {
 
 	private JLabel statusLabel = new JLabel("");
 
-	private DefaultListModel<String> classesList = new DefaultListModel<String>();
+	private DefaultListModel<String> classesList = new DefaultListModel<>();
 
 	private Thread tmp_thread;
 
@@ -86,7 +85,7 @@ public class FindAllBox extends JDialog {
 
 		this.getRootPane().setDefaultButton(findButton);
 
-		list = new JList<String>(classesList);
+		list = new JList<>(classesList);
 		list.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
 		list.setLayoutOrientation(JList.VERTICAL_WRAP);
 		list.setVisibleRowCount(-1);
@@ -96,7 +95,7 @@ public class FindAllBox extends JDialog {
 				JList<String> list = (JList<String>) evt.getSource();
 				if (evt.getClickCount() == 2) {
 					int index = list.locationToIndex(evt.getPoint());
-					String entryName = (String) list.getModel().getElementAt(index);
+					String entryName = list.getModel().getElementAt(index);
 					String[] array = entryName.split("/");
 					if (entryName.toLowerCase().endsWith(".class")) {
 						String internalName = StringUtilities.removeRight(entryName, ".class");
@@ -109,14 +108,10 @@ public class FindAllBox extends JDialog {
 						}
 
 					} else {
-						try {
-							JarFile jfile = new JarFile(mainWindow.getSelectedModel().getOpenedFile());
+						try (JarFile jfile = new JarFile(mainWindow.getSelectedModel().getOpenedFile())) {
 							mainWindow.getSelectedModel().extractSimpleFileEntryToTextPane(
 									jfile.getInputStream(jfile.getEntry(entryName)), array[array.length - 1],
 									entryName);
-							jfile.close();
-						} catch (IOException e) {
-							e.printStackTrace();
 						} catch (Exception e) {
 							e.printStackTrace();
 						}
@@ -186,98 +181,96 @@ public class FindAllBox extends JDialog {
 
 		@Override
 		public void actionPerformed(ActionEvent event) {
-			tmp_thread = new Thread() {
-				public void run() {
-					if (findButton.getText().equals("Stop")) {
-						if (tmp_thread != null)
-							tmp_thread.interrupt();
-						setStatus("Stopped.");
-						findButton.setText("Find");
-						locked = false;
-					} else {
-						findButton.setText("Stop");
-						classesList.clear();
-						ConfigSaver configSaver = ConfigSaver.getLoadedInstance();
-						DecompilerSettings settings = configSaver.getDecompilerSettings();
-						File inFile = mainWindow.getSelectedModel().getOpenedFile();
-						boolean filter = ConfigSaver.getLoadedInstance().getLuytenPreferences()
-								.isFilterOutInnerClassEntries();
-						try {
-							JarFile jfile = new JarFile(inFile);
-							Enumeration<JarEntry> entLength = jfile.entries();
-							initProgressBar(Collections.list(entLength).size());
-							Enumeration<JarEntry> ent = jfile.entries();
-							while (ent.hasMoreElements() && findButton.getText().equals("Stop")) {
-								JarEntry entry = ent.nextElement();
-								String name = entry.getName();
-								setStatus(name);
-								if (filter && name.contains("$"))
-									continue;
-								if(locked || classname.isSelected()){
-									locked = true;
-									if(search(entry.getName()))
-										addClassName(entry.getName());
-								}else{
-									if (entry.getName().endsWith(".class")) {
-										synchronized (settings) {
-											String internalName = StringUtilities.removeRight(entry.getName(), ".class");
-											TypeReference type = Model.metadataSystem.lookupType(internalName);
-											TypeDefinition resolvedType = null;
-											if (type == null || ((resolvedType = type.resolve()) == null)) {
-												throw new Exception("Unable to resolve type.");
-											}
-											StringWriter stringwriter = new StringWriter();
-											DecompilationOptions decompilationOptions;
-											decompilationOptions = new DecompilationOptions();
-											decompilationOptions.setSettings(settings);
-											decompilationOptions.setFullDecompilation(true);
-											PlainTextOutput plainTextOutput = new PlainTextOutput(stringwriter);
-											plainTextOutput.setUnicodeOutputEnabled(
-													decompilationOptions.getSettings().isUnicodeOutputEnabled());
-											settings.getLanguage().decompileType(resolvedType, plainTextOutput,
-													decompilationOptions);
-											if (search(stringwriter.toString()))
-												addClassName(entry.getName());
-										}
-									} else {
+			tmp_thread = new Thread(() -> {
+                if (findButton.getText().equals("Stop")) {
+                    if (tmp_thread != null)
+                        tmp_thread.interrupt();
+                    setStatus("Stopped.");
+                    findButton.setText("Find");
+                    locked = false;
+                } else {
+                    findButton.setText("Stop");
+                    classesList.clear();
+                    ConfigSaver configSaver = ConfigSaver.getLoadedInstance();
+                    DecompilerSettings settings = configSaver.getDecompilerSettings();
+                    File inFile = mainWindow.getSelectedModel().getOpenedFile();
+                    boolean filter = ConfigSaver.getLoadedInstance().getLuytenPreferences()
+                            .isFilterOutInnerClassEntries();
+                    try {
+                        JarFile jfile = new JarFile(inFile);
+                        Enumeration<JarEntry> entLength = jfile.entries();
+                        initProgressBar(Collections.list(entLength).size());
+                        Enumeration<JarEntry> ent = jfile.entries();
+                        while (ent.hasMoreElements() && findButton.getText().equals("Stop")) {
+                            JarEntry entry = ent.nextElement();
+                            String name = entry.getName();
+                            setStatus(name);
+                            if (filter && name.contains("$"))
+                                continue;
+                            if(locked || classname.isSelected()){
+                                locked = true;
+                                if(search(entry.getName()))
+                                    addClassName(entry.getName());
+                            }else{
+                                if (entry.getName().endsWith(".class")) {
+                                    synchronized (settings) {
+                                        String internalName = StringUtilities.removeRight(entry.getName(), ".class");
+                                        TypeReference type = Model.metadataSystem.lookupType(internalName);
+                                        TypeDefinition resolvedType = null;
+                                        if (type == null || ((resolvedType = type.resolve()) == null)) {
+                                            throw new Exception("Unable to resolve type.");
+                                        }
+                                        StringWriter stringwriter = new StringWriter();
+                                        DecompilationOptions decompilationOptions;
+                                        decompilationOptions = new DecompilationOptions();
+                                        decompilationOptions.setSettings(settings);
+                                        decompilationOptions.setFullDecompilation(true);
+                                        PlainTextOutput plainTextOutput = new PlainTextOutput(stringwriter);
+                                        plainTextOutput.setUnicodeOutputEnabled(
+                                                decompilationOptions.getSettings().isUnicodeOutputEnabled());
+                                        settings.getLanguage().decompileType(resolvedType, plainTextOutput,
+                                                decompilationOptions);
+                                        if (search(stringwriter.toString()))
+                                            addClassName(entry.getName());
+                                    }
+                                } else {
 
-										StringBuilder sb = new StringBuilder();
-										long nonprintableCharactersCount = 0;
-										try (InputStreamReader inputStreamReader = new InputStreamReader(
-												jfile.getInputStream(entry));
-												BufferedReader reader = new BufferedReader(inputStreamReader);) {
-											String line;
-											while ((line = reader.readLine()) != null) {
-												sb.append(line).append("\n");
+                                    StringBuilder sb = new StringBuilder();
+                                    long nonprintableCharactersCount = 0;
+                                    try (InputStreamReader inputStreamReader = new InputStreamReader(
+                                            jfile.getInputStream(entry));
+                                            BufferedReader reader = new BufferedReader(inputStreamReader)) {
+                                        String line;
+                                        while ((line = reader.readLine()) != null) {
+                                            sb.append(line).append("\n");
 
-												for (byte nextByte : line.getBytes()) {
-													if (nextByte <= 0) {
-														nonprintableCharactersCount++;
-													}
-												}
+                                            for (byte nextByte : line.getBytes()) {
+                                                if (nextByte <= 0) {
+                                                    nonprintableCharactersCount++;
+                                                }
+                                            }
 
-											}
-										}
-										if (nonprintableCharactersCount < 5 && search(sb.toString()))
-											addClassName(entry.getName());
-									}
-								}
-							}
-							setSearching(false);
-							if (findButton.getText().equals("Stop")) {
-								setStatus("Done.");
-								findButton.setText("Find");
-								locked = false;
-							}
-							jfile.close();
-							locked = false;
-						} catch (Exception e) {
-							Luyten.showExceptionDialog("Exception!", e);
-						}
+                                        }
+                                    }
+                                    if (nonprintableCharactersCount < 5 && search(sb.toString()))
+                                        addClassName(entry.getName());
+                                }
+                            }
+                        }
+                        setSearching(false);
+                        if (findButton.getText().equals("Stop")) {
+                            setStatus("Done.");
+                            findButton.setText("Find");
+                            locked = false;
+                        }
+                        jfile.close();
+                        locked = false;
+                    } catch (Exception e) {
+                        Luyten.showExceptionDialog("Exception!", e);
+                    }
 
-					}
-				}
-			};
+                }
+            });
 			tmp_thread.start();
 
 		}
@@ -295,10 +288,8 @@ public class FindAllBox extends JDialog {
 			a = a.toLowerCase();
 			b = b.toLowerCase();
 		}
-		if (b.contains(a))
-			return true;
-		return false;
-	}
+        return b.contains(a);
+    }
 
 	private void setHideOnEscapeButton() {
 		Action escapeAction = new AbstractAction() {
