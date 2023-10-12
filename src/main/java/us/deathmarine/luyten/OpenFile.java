@@ -373,7 +373,7 @@ public class OpenFile {
             }
 
             private String createLinkLabel(MouseEvent e) {
-                int offs = textArea.viewToModel(e.getPoint());
+                int offs = textArea.viewToModel2D(e.getPoint());
                 if (isNavigationLinksValid) {
                     return getLinkDescriptionForOffset(offs);
                 }

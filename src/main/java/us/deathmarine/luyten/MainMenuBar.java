@@ -179,7 +179,7 @@ public class MainMenuBar extends JMenuBar {
         menuItem.addActionListener(e -> {
             JTabbedPane house = mainWindow.getSelectedModel().house;
 
-            if (e.getModifiers() != InputEvent.CTRL_MASK || house.getTabCount() == 0)
+            if ((e.getModifiers() & InputEvent.CTRL_MASK) != 0 || house.getTabCount() == 0)
                 mainWindow.onCloseFileMenu();
             else {
                 mainWindow.getSelectedModel().closeOpenTab(house.getSelectedIndex());

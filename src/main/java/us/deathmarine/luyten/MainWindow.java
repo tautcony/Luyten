@@ -338,7 +338,7 @@ public class MainWindow extends JFrame {
         try {
             sb.append(readFromInputString(getClass().getResourceAsStream("/licenses/Procyon.License.txt")));
             sb.append("\n\n\n\n\n");
-            sb.append(getClass().getResourceAsStream("/licenses/RSyntaxTextArea.License.txt"));
+            sb.append(readFromInputString(getClass().getResourceAsStream("/licenses/RSyntaxTextArea.License.txt")));
         } catch (IOException e) {
             Luyten.showExceptionDialog("Exception!", e);
         }
